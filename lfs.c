@@ -69,24 +69,27 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 	memset(stbuf, 0, sizeof(struct stat));
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
-	stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = time(NULL);
+	stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = 0;
 
 	switch (lfs_file_type(path)) {
 	case LFS_ROOT:
 		stbuf->st_mode = S_IFDIR | 0755;
 		stbuf->st_nlink = 2;
-		//stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = 0;
 		break;
 	case LFS_FILE:
 		stbuf->st_mode = S_IFREG | 0644;
 		stbuf->st_nlink = 1;
 		stbuf->st_size = lfs_size;
-		//stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = 0;
 		break;
 	case LFS_NONE:
 		return -ENOENT;
 	}
 
+	return 0;
+}
+
+static int lfs_utimens(const char *path, const struct timespec ts[2])
+{
 	return 0;
 }
 
@@ -170,6 +173,7 @@ static struct fuse_operations lfs_oper = {
 	.getattr	= lfs_getattr,
 	.readdir	= lfs_readdir,
 	.truncate	= lfs_truncate,
+	.utimens	= lfs_utimens,
 	.open		= lfs_open,
 	.read		= lfs_read,
 	.write		= lfs_write,
