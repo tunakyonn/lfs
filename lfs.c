@@ -4,18 +4,7 @@
   gcc -Wall lfs.c `pkg-config fuse --cflags --libs` -o lfs
 */
 
-
-#define FUSE_USE_VERSION 26
-
-#include <fuse.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
-#include <errno.h>
-
-#define _XOPEN_SOURCE 700
+#include "lfs.h"
 
 #define LFS_NAME "lfs"
 
@@ -28,7 +17,7 @@ enum {
 static void *lfs_buf;
 static size_t lfs_size;
 
-static int lfs_resize(size_t new_size)
+int lfs_resize(size_t new_size)
 {
 	void *new_buf;
 
@@ -48,14 +37,14 @@ static int lfs_resize(size_t new_size)
 	return 0;
 }
 
-static int lfs_expand(size_t new_size)
+int lfs_expand(size_t new_size)
 {
 	if (new_size > lfs_size)
 		return lfs_resize(new_size);
 	return 0;
 }
 
-static int lfs_file_type(const char *path)
+int lfs_file_type(const char *path)
 {
 	if (strcmp(path, "/") == 0)
 		return LFS_ROOT;
@@ -100,7 +89,7 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int lfs_do_read(char *buf, size_t size, off_t offset)
+int lfs_do_read(char *buf, size_t size, off_t offset)
 {
 	if (offset >= lfs_size)
 		return 0;
@@ -124,7 +113,7 @@ static int lfs_read(const char *path, char *buf, size_t size,
 	return lfs_do_read(buf, size, offset);
 }
 
-static int lfs_do_write(const char *buf, size_t size, off_t offset)
+int lfs_do_write(const char *buf, size_t size, off_t offset)
 {
 	if (lfs_expand(offset + size))
 		return -ENOMEM;
