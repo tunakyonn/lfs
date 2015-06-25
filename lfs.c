@@ -16,6 +16,7 @@ enum {
 
 static void *lfs_buf;
 static size_t lfs_size;
+int lfs_initialized = 0;
 
 int lfs_resize(size_t new_size)
 {
@@ -86,6 +87,12 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
+
+	if (!lfs_initialized)
+	{
+		lfs_initialized = 1;
+		lfs_resize(0);
+	}
 	return 0;
 }
 
