@@ -1,7 +1,12 @@
 /*
   Log-structured file system sample
 
-  gcc -Wall lfs.c `pkg-config fuse --cflags --libs` -o lfs
+  compile method
+
+  gcc -c lfs.c `pkg-config fuse --cflags --libs`
+  gcc -c list.c `pkg-config fuse --cflags --libs`
+  gcc lfs.o list.o -o lfs `pkg-config fuse --cflags --libs`
+
 */
 
 #include "lfs.h"
@@ -17,6 +22,11 @@ enum {
 static void *lfs_buf;
 static size_t lfs_size;
 int lfs_initialized = 0;
+
+void lfs_init(){
+	List *list = NULL;
+	Initialize(list);
+}
 
 int lfs_resize(size_t new_size)
 {
@@ -177,5 +187,7 @@ static struct fuse_operations lfs_oper = {
 
 int main(int argc, char *argv[])
 {
-	return fuse_main(argc, argv, &lfs_oper, NULL);
+	lfs_init();
+
+	return fuse_main(argc, argv, &lfs_oper, 0);
 }

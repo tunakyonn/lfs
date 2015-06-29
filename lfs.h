@@ -11,6 +11,9 @@
 #include <time.h>
 #include <errno.h>
 
+#include "list.h"
+
+//void lfs_init();
 
 int lfs_resize(size_t new_size);
 int lfs_expand(size_t new_size);
