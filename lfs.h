@@ -11,7 +11,13 @@
 #include <time.h>
 #include <errno.h>
 
+struct file_arg {
+	void		*buf;
+	size_t		size;
+	char		*f_name;
+};
 
+char* get_filename(const char *path);
 int lfs_resize(size_t new_size);
 int lfs_expand(size_t new_size);
 int lfs_file_type(const char *path);
@@ -23,10 +29,12 @@ int lfs_do_write(const char *buf, size_t size, off_t offset);
 
 static int lfs_getattr(const char *path, struct stat *stbuf);
 static int lfs_utimens(const char *path, const struct timespec ts[2]);
+static int lfs_mknod(const char *path, mode_t mode, dev_t rdev);
 static int lfs_open(const char *path, struct fuse_file_info *fi);
 static int lfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int lfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int lfs_truncate(const char *path, off_t size);
 static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
 */
+
 #endif

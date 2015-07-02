@@ -14,39 +14,55 @@ enum {
 	LFS_FILE,
 };
 
-static void *lfs_buf;
-static size_t lfs_size;
+static struct file_arg lfs;
 int lfs_initialized = 0;
+
+//get the file name from the path
+char* get_filename(const char *path)
+{
+	char *p = NULL;
+	char *q = NULL;
+
+    strcpy(p, path);
+    q = p + 1;
+
+    return q;
+}
 
 int lfs_resize(size_t new_size)
 {
 	void *new_buf;
 
-	if (new_size == lfs_size)
+	if (new_size == lfs.size)
 		return 0;
 
-	new_buf = realloc(lfs_buf, new_size);
+	new_buf = realloc(lfs.buf, new_size);
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
-	if (new_size > lfs_size)
-		memset(new_buf + lfs_size, 0, new_size - lfs_size);
+	if (new_size > lfs.size)
+		memset(new_buf + lfs.size, 0, new_size - lfs.size);
 
-	lfs_buf = new_buf;
-	lfs_size = new_size;
+	lfs.buf = new_buf;
+	lfs.size = new_size;
 
 	return 0;
 }
 
 int lfs_expand(size_t new_size)
 {
-	if (new_size > lfs_size)
+	if (new_size > lfs.size)
 		return lfs_resize(new_size);
 	return 0;
 }
 
 int lfs_file_type(const char *path)
 {
+	//char *f;
+	//f = get_filename(path);
+	//char *p = "/";
+	//strcat(p, get_filename(path));
+	
 	if (strcmp(path, "/") == 0)
 		return LFS_ROOT;
 	if (strcmp(path, "/" LFS_NAME) == 0)
@@ -69,7 +85,7 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 	case LFS_FILE:
 		stbuf->st_mode = S_IFREG | 0644;
 		stbuf->st_nlink = 1;
-		stbuf->st_size = lfs_size;
+		stbuf->st_size = lfs.size;
 		break;
 	case LFS_NONE:
 		return -ENOENT;
@@ -79,6 +95,11 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 }
 
 static int lfs_utimens(const char *path, const struct timespec ts[2])
+{
+	return 0;
+}
+
+static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	return 0;
 }
@@ -98,13 +119,13 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 
 int lfs_do_read(char *buf, size_t size, off_t offset)
 {
-	if (offset >= lfs_size)
+	if (offset >= lfs.size)
 		return 0;
 
-	if (size > lfs_size - offset)
-		size = lfs_size - offset;
+	if (size > lfs.size - offset)
+		size = lfs.size - offset;
 
-	memcpy(buf, lfs_buf + offset, size);
+	memcpy(buf, lfs.buf + offset, size);
 
 	return size;
 }
@@ -125,7 +146,7 @@ int lfs_do_write(const char *buf, size_t size, off_t offset)
 	if (lfs_expand(offset + size))
 		return -ENOMEM;
 
-	memcpy(lfs_buf + offset, buf, size);
+	memcpy(lfs.buf + offset, buf, size);
 
 	return size;
 }
@@ -158,9 +179,14 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (lfs_file_type(path) != LFS_ROOT)
 		return -ENOENT;
 
+	//char *f;
+	//f = get_filename(path);
+	//(void) f;
+
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	filler(buf, LFS_NAME, NULL, 0);
+	//filler(buf, LFS_NAME, NULL, 0);
+	//filler(buf, f, NULL, 0);
 
 	return 0;
 }
@@ -168,6 +194,7 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static struct fuse_operations lfs_oper = {
 	.getattr	= lfs_getattr,
 	.readdir	= lfs_readdir,
+	.mknod		= lfs_mknod,
 	.truncate	= lfs_truncate,
 	.utimens	= lfs_utimens,
 	.open		= lfs_open,
