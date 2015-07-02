@@ -57,12 +57,7 @@ int lfs_expand(size_t new_size)
 }
 
 int lfs_file_type(const char *path)
-{
-	//char *f;
-	//f = get_filename(path);
-	//char *p = "/";
-	//strcat(p, get_filename(path));
-	
+{	
 	if (strcmp(path, "/") == 0)
 		return LFS_ROOT;
 	if (strcmp(path, "/" LFS_NAME) == 0)
@@ -179,14 +174,9 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (lfs_file_type(path) != LFS_ROOT)
 		return -ENOENT;
 
-	//char *f;
-	//f = get_filename(path);
-	//(void) f;
-
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	//filler(buf, LFS_NAME, NULL, 0);
-	//filler(buf, f, NULL, 0);
+	filler(buf, LFS_NAME, NULL, 0);
 
 	return 0;
 }
