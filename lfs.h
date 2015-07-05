@@ -11,12 +11,15 @@
 #include <time.h>
 #include <errno.h>
 
+#define MAXNAME 128
+
 struct file_arg {
 	void		*buf;
 	size_t		size;
-	char		*f_name;
+	char		f_name[MAXNAME];
 };
 
+void lfs_init();
 char* get_filename(const char *path);
 int lfs_resize(size_t new_size);
 int lfs_expand(size_t new_size);
