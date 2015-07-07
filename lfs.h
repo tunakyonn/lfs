@@ -13,14 +13,28 @@
 
 #define MAXNAME 128
 
-struct file_arg {
+typedef struct {
 	void		*buf;
 	size_t		size;
 	char		f_name[MAXNAME];
-};
+}File_arg;
 
+typedef struct __node {
+	File_arg		data;
+	struct __node 	*next;
+}Node;
+
+typedef struct {
+	Node *head;
+	Node *crnt;
+}List;
+
+
+void list_init(List *list);
+Node *AllocNode(void);
+void SetNode(Node *n, const File_arg *x, Node *next);
 void lfs_init();
-char* get_filename(const char *path);
+char *get_filename(const char *path);
 int lfs_resize(size_t new_size);
 int lfs_expand(size_t new_size);
 int lfs_file_type(const char *path);
