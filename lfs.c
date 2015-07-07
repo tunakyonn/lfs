@@ -51,22 +51,12 @@ void lfs_init()
 	strcpy(lfs.f_name, "lfs");
 	SetNode(list.head, &lfs, ptr);
 	free(ptr);
-/*
-	list.head->next = list.crnt = AllocNode();
-	strcpy(list.head->next->data.f_name, "a");
-	SetNode(list.head->next, &list.head->next->data, NULL);
-*/
-	File_arg x;
-	strcpy(x.f_name, "a");
-	Insert(&list, &x);
-
-	//fprintf(stderr, "CHECK\n");
 }
 
 //get the file name from the path
 char *get_filename(const char *path)
 {
-	char *p = (char*)malloc(sizeof(char) * 128);
+	char *p = (char*)malloc(sizeof(char) * 127);
 	 
     strcpy(p, path);
     p = p + 1;
@@ -109,7 +99,7 @@ int lfs_file_type(const char *path)
 		return LFS_ROOT;
 	for (n = list.head; n != NULL; n = n->next)
 	{
-		if (strcmp(p, lfs.f_name) == 0)
+		if (strcmp(p, n->data.f_name) == 0)
 			return LFS_FILE;		
 	}
 	return LFS_NONE;
@@ -117,14 +107,12 @@ int lfs_file_type(const char *path)
 
 static int lfs_getattr(const char *path, struct stat *stbuf)
 {	
-	char *p;
-	p = get_filename(path);
+	char *p = get_filename(path);
 	Node *n;
 
 	memset(stbuf, 0, sizeof(struct stat));
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
-	stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = 0;
 
 	if (strcmp(path, "/") == 0){
 		stbuf->st_mode = S_IFDIR | 0755;
@@ -151,15 +139,22 @@ static int lfs_utimens(const char *path, const struct timespec ts[2])
 
 static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+	if (lfs_file_type(path) == LFS_FILE)
+		return -EEXIST;
+
+	char *p = get_filename(path);
+	File_arg x;
+	strcpy(x.f_name, p);
+	Insert(&list, &x);	
+
 	return 0;
 }
 
 static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
-	/*
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
-*/
+
 	if (!lfs_initialized)
 	{
 		lfs_initialized = 1;
@@ -186,8 +181,8 @@ static int lfs_read(const char *path, char *buf, size_t size,
 {
 	(void) fi;
 
-	//if (lfs_file_type(path) != LFS_FILE)
-	//	return -EINVAL;
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
 
 	return lfs_do_read(buf, size, offset);
 }
@@ -207,16 +202,16 @@ static int lfs_write(const char *path, const char *buf, size_t size,
 {
 	(void) fi;
 
-	//if (lfs_file_type(path) != LFS_FILE)
-	//	return -EINVAL;
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
 
 	return lfs_do_write(buf, size, offset);
 }
 
 static int lfs_truncate(const char *path, off_t size)
 {
-	//if (lfs_file_type(path) != LFS_FILE)
-	//	return -EINVAL;
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
 
 	return lfs_resize(size);
 }
