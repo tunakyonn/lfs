@@ -13,6 +13,7 @@
 
 #define MAXNAME 128
 
+//filelist
 typedef struct {
 	void		*buf;
 	size_t		size;
@@ -33,6 +34,30 @@ typedef struct {
 void list_init(List *list);
 Node *AllocNode(void);
 void SetNode(Node *n, const File_arg *x, Node *next);
+void Insert(List *list, const File_arg *lfs);
+
+//loglist information
+typedef struct {
+	struct fuse_operations	oper;
+}Log_arg;
+
+typedef struct __lnode {
+	Log_arg			data;
+	struct __lnode 	*next;
+}Lnode;
+
+typedef struct {
+	Lnode *head;
+	Lnode *crnt;
+}Log_list;
+
+
+void log_init(Log_list *log_list);
+Lnode *Log_AllocNode(void);
+void Log_SetNode(Lnode *n, const Log_arg *y, Lnode *next);
+void Log_insert(Log_list *log_list, const Log_arg *y);
+
+//functions
 void lfs_init();
 char *get_filename(const char *path);
 int lfs_resize(size_t new_size);

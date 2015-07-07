@@ -14,7 +14,34 @@ enum {
 
 static File_arg lfs;
 static List list;
+static Log_list log_list;
+
 int lfs_initialized = 0;
+
+void log_init(Log_list *log_list)
+{
+	log_list->head = NULL;
+	log_list->crnt = NULL;
+}
+
+
+Lnode *Log_AllocNode(void)
+{
+	return calloc(1, sizeof(Lnode));
+}
+
+void Log_SetNode(Lnode *n, const Log_arg *y, Lnode *next)
+{
+	n->data = *y;
+	n->next = next;
+}
+
+void Log_insert(Log_list *log_list, const Log_arg *y)
+{
+	Lnode *ptr = log_list->head;
+	log_list->head = log_list->crnt = Log_AllocNode();
+	Log_SetNode(log_list->head, y, ptr);
+}
 
 void list_init(List *list){
 	list->head = NULL;
@@ -51,6 +78,8 @@ void lfs_init()
 	strcpy(lfs.f_name, "lfs");
 	SetNode(list.head, &lfs, ptr);
 	free(ptr);
+
+	log_init(&log_list);
 }
 
 //get the file name from the path
@@ -139,6 +168,9 @@ static int lfs_utimens(const char *path, const struct timespec ts[2])
 
 static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+	(void) mode;
+	(void) rdev;
+
 	if (lfs_file_type(path) == LFS_FILE)
 		return -EEXIST;
 
