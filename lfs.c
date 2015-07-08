@@ -12,18 +12,16 @@ enum {
 	LFS_FILE,
 };
 
-static File_arg lfs;
 static List list;
 static Log_list log_list;
 
-int lfs_initialized = 0;
+//int lfs_initialized = 0;
 
 void log_init(Log_list *log_list)
 {
 	log_list->head = NULL;
 	log_list->crnt = NULL;
 }
-
 
 Lnode *Log_AllocNode(void)
 {
@@ -71,12 +69,13 @@ void Insert(List *list, const File_arg *lfs)
 
 void lfs_init()
 {
+	Node *n = (Node*)malloc(sizeof(Node));
 	list_init(&list);
 
 	Node *ptr = list.head;
 	list.head = list.crnt = AllocNode();
-	strcpy(lfs.f_name, "lfs");
-	SetNode(list.head, &lfs, ptr);
+	strcpy(n->data.f_name, "lfs");
+	SetNode(list.head, &n->data, ptr);
 	free(ptr);
 
 	log_init(&log_list);
@@ -92,30 +91,30 @@ char *get_filename(const char *path)
     return p;
 }
 
-int lfs_resize(size_t new_size)
+int lfs_resize(size_t new_size, File_arg data)
 {
 	void *new_buf;
 
-	if (new_size == lfs.size)
+	if (new_size == data.size)
 		return 0;
 
-	new_buf = realloc(lfs.buf, new_size);
+	new_buf = realloc(data.buf, new_size);
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
-	if (new_size > lfs.size)
-		memset(new_buf + lfs.size, 0, new_size - lfs.size);
+	if (new_size > data.size)
+		memset(new_buf + data.size, 0, new_size - data.size);
 
-	lfs.buf = new_buf;
-	lfs.size = new_size;
+	data.buf = new_buf;
+	data.size = new_size;
 
 	return 0;
 }
 
-int lfs_expand(size_t new_size)
+int lfs_expand(size_t new_size, File_arg data)
 {
-	if (new_size > lfs.size)
-		return lfs_resize(new_size);
+	if (new_size > data.size)
+		return lfs_resize(new_size, data);
 	return 0;
 }
 
@@ -153,7 +152,7 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 			if (strcmp(p, n->data.f_name) == 0){
 				stbuf->st_mode = S_IFREG | 0644;
 				stbuf->st_nlink = 1;
-				stbuf->st_size = lfs.size;
+				stbuf->st_size = n->data.size;
 				return 0;
 			}
 		}
@@ -175,9 +174,9 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 		return -EEXIST;
 
 	char *p = get_filename(path);
-	File_arg x;
-	strcpy(x.f_name, p);
-	Insert(&list, &x);	
+	File_arg *x = (File_arg*)malloc(sizeof(File_arg));
+	strcpy(x->f_name, p);
+	Insert(&list, x);
 
 	return 0;
 }
@@ -186,24 +185,43 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
-
+/*
 	if (!lfs_initialized)
 	{
 		lfs_initialized = 1;
 		lfs_resize(0);
 	}
+	*/
 	return 0;
 }
 
-int lfs_do_read(char *buf, size_t size, off_t offset)
+int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 {
-	if (offset >= lfs.size)
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+
+	if (n->data.buf == NULL)
+		lfs_resize(0, n->data);
+
+	if (offset >= n->data.size)
 		return 0;
 
-	if (size > lfs.size - offset)
-		size = lfs.size - offset;
+	if (size > n->data.size - offset)
+		size = n->data.size - offset;
 
-	memcpy(buf, lfs.buf + offset, size);
+	memcpy(buf, n->data.buf + offset, size);
 
 	return size;
 }
@@ -216,15 +234,29 @@ static int lfs_read(const char *path, char *buf, size_t size,
 	if (lfs_file_type(path) != LFS_FILE)
 		return -EINVAL;
 
-	return lfs_do_read(buf, size, offset);
+	return lfs_do_read(path, buf, size, offset);
 }
 
-int lfs_do_write(const char *buf, size_t size, off_t offset)
+int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 {
-	if (lfs_expand(offset + size))
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+	if (init == 0)
+		return -ENOENT;
+
+	if (lfs_expand(offset + size, n->data))
 		return -ENOMEM;
 
-	memcpy(lfs.buf + offset, buf, size);
+	memcpy(n->data.buf + offset, buf, size);
 
 	return size;
 }
@@ -237,7 +269,7 @@ static int lfs_write(const char *path, const char *buf, size_t size,
 	if (lfs_file_type(path) != LFS_FILE)
 		return -EINVAL;
 
-	return lfs_do_write(buf, size, offset);
+	return lfs_do_write(path, buf, size, offset);
 }
 
 static int lfs_truncate(const char *path, off_t size)
@@ -245,7 +277,21 @@ static int lfs_truncate(const char *path, off_t size)
 	if (lfs_file_type(path) != LFS_FILE)
 		return -EINVAL;
 
-	return lfs_resize(size);
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+	if (init == 0)
+		return -ENOENT;
+
+	return lfs_resize(size, n->data);
 }
 
 static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,

@@ -60,11 +60,11 @@ void Log_insert(Log_list *log_list, const Log_arg *y);
 //functions
 void lfs_init();
 char *get_filename(const char *path);
-int lfs_resize(size_t new_size);
-int lfs_expand(size_t new_size);
+int lfs_resize(size_t new_size, File_arg data);
+int lfs_expand(size_t new_size, File_arg data);
 int lfs_file_type(const char *path);
-int lfs_do_read(char *buf, size_t size, off_t offset);
-int lfs_do_write(const char *buf, size_t size, off_t offset);
+int lfs_do_read(const char *path, char *buf, size_t size, off_t offset);
+int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset);
 
 
 /* file_operations
