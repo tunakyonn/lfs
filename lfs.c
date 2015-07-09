@@ -58,22 +58,52 @@ void SetNode(Node *n, const File_arg *x, Node *next)
 void Insert(List *list, const Node *n)
 {
 	Node *ptr = list->head;
-	
-	while(ptr->next != NULL)
-		ptr = ptr->next;
-	ptr->next = list->crnt = AllocNode();
-	SetNode(ptr->next, &n->data, NULL);
+
+	if (list->head == NULL)
+	{
+		list->head = list->crnt = AllocNode();
+		SetNode(list->head, &n->data, ptr);
+	}else{
+		while(ptr->next != NULL)
+			ptr = ptr->next;
+		ptr->next = list->crnt = AllocNode();
+		SetNode(ptr->next, &n->data, NULL);
+	}
+}
+
+void Delete(List *list, Node *n)
+{
+	if (list->head != NULL)
+	{
+		if ((list->head)->next == NULL)
+		{
+			Node *ptr = list->head->next;
+			free(n);
+			list->head = list->crnt = ptr;
+		}else{
+			Node *ptr = list->head;
+			//list->crnt = n;
+			while (ptr->next != n){
+				ptr = ptr->next;
+			ptr->next = n->next;
+			free(n);
+			//list->crnt = ptr->next;
+			}
+		}
+	}
 }
 
 void lfs_init()
 {
-	Node *n = (Node*)malloc(sizeof(Node));
+	Node n;
 	list_init(&list);
 
 	Node *ptr = list.head;
 	list.head = list.crnt = AllocNode();
-	strcpy(n->data.f_name, "lfs");
-	SetNode(list.head, &n->data, ptr);
+	strcpy(n.data.f_name, "lfs");
+	n.data.buf = NULL;
+	n.data.size = 0;
+	SetNode(list.head, &n.data, ptr);
 	free(ptr);
 
 	log_init(&log_list);
@@ -180,6 +210,33 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 
 	return 0;
 }
+
+static int lfs_unlink(const char *path)
+{
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+
+	strcpy(n->data.f_name, "");
+	n->data.buf = NULL;
+	n->data.size = 0;
+
+	Delete(&list, n);
+
+	return 0;
+}
+
 
 static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
@@ -313,6 +370,7 @@ static struct fuse_operations lfs_oper = {
 	.getattr	= lfs_getattr,
 	.readdir	= lfs_readdir,
 	.mknod		= lfs_mknod,
+	.unlink		= lfs_unlink,
 	.truncate	= lfs_truncate,
 	.utimens	= lfs_utimens,
 	.open		= lfs_open,
@@ -323,6 +381,5 @@ static struct fuse_operations lfs_oper = {
 int main(int argc, char *argv[])
 {
 	lfs_init();
-
 	return fuse_main(argc, argv, &lfs_oper, NULL);
 }

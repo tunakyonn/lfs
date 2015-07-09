@@ -35,6 +35,7 @@ void list_init(List *list);
 Node *AllocNode(void);
 void SetNode(Node *n, const File_arg *x, Node *next);
 void Insert(List *list, const Node *n);
+void Delete(List *list, Node *n);
 
 //loglist information
 typedef struct {
