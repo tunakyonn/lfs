@@ -34,7 +34,7 @@ typedef struct {
 void list_init(List *list);
 Node *AllocNode(void);
 void SetNode(Node *n, const File_arg *x, Node *next);
-void Insert(List *list, const File_arg *lfs);
+void Insert(List *list, const File_arg *x);
 
 //loglist information
 typedef struct {
@@ -60,8 +60,8 @@ void Log_insert(Log_list *log_list, const Log_arg *y);
 //functions
 void lfs_init();
 char *get_filename(const char *path);
-int lfs_resize(size_t new_size, File_arg data);
-int lfs_expand(size_t new_size, File_arg data);
+int lfs_resize(size_t new_size, Node *n);
+int lfs_expand(size_t new_size, Node *n);
 int lfs_file_type(const char *path);
 int lfs_do_read(const char *path, char *buf, size_t size, off_t offset);
 int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset);
