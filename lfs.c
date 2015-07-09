@@ -15,8 +15,6 @@ enum {
 static List list;
 static Log_list log_list;
 
-//int lfs_initialized = 0;
-
 void log_init(Log_list *log_list)
 {
 	log_list->head = NULL;
@@ -57,14 +55,14 @@ void SetNode(Node *n, const File_arg *x, Node *next)
 	n->next = next;
 }
 
-void Insert(List *list, const File_arg *x)
+void Insert(List *list, const Node *n)
 {
 	Node *ptr = list->head;
 	
 	while(ptr->next != NULL)
 		ptr = ptr->next;
 	ptr->next = list->crnt = AllocNode();
-	SetNode(ptr->next, x, NULL);
+	SetNode(ptr->next, &n->data, NULL);
 }
 
 void lfs_init()
@@ -174,9 +172,11 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 		return -EEXIST;
 
 	char *p = get_filename(path);
-	Node *n = (Node*)malloc(sizeof(Node));
-	strcpy(n->data.f_name, p);
-	Insert(&list, &n->data);
+	Node n;
+	strcpy(n.data.f_name, p);
+	n.data.buf = NULL;
+	n.data.size = 0;
+	Insert(&list, &n);
 
 	return 0;
 }
@@ -185,13 +185,7 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
-/*
-	if (!lfs_initialized)
-	{
-		lfs_initialized = 1;
-		lfs_resize(0);
-	}
-	*/
+
 	return 0;
 }
 
@@ -212,8 +206,8 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	if (init == 0)
 		return -ENOENT;
 
-	//if (n->data.buf == NULL)
-	//	lfs_resize(0, n);
+	if (n->data.buf == NULL && n->data.size == 0)
+		lfs_resize(0, n);
 
 	if (offset >= n->data.size)
 		return 0;
