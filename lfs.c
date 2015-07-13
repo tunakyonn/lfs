@@ -6,19 +6,13 @@
 
 #include "lfs.h"
 
-enum {
-	LFS_NONE,
-	LFS_ROOT,
-	LFS_FILE,
-};
+static List *list;
+//static Log_list l;
 
-static List list;
-static Log_list log_list;
-
-void log_init(Log_list *log_list)
+void Log_init(Log_list *l)
 {
-	log_list->head = NULL;
-	log_list->crnt = NULL;
+	l->head = NULL;
+	l->crnt = NULL;
 }
 
 Lnode *Log_AllocNode(void)
@@ -26,20 +20,29 @@ Lnode *Log_AllocNode(void)
 	return calloc(1, sizeof(Lnode));
 }
 
-void Log_SetNode(Lnode *n, const Log_arg *y, Lnode *next)
+void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next)
 {
-	n->data = *y;
-	n->next = next;
+	ln->arg = *y;
+	ln->next = next;
 }
 
-void Log_insert(Log_list *log_list, const Log_arg *y)
+void Log_insert(Log_list *l, const Lnode *ln)
 {
-	Lnode *ptr = log_list->head;
-	log_list->head = log_list->crnt = Log_AllocNode();
-	Log_SetNode(log_list->head, y, ptr);
+	Lnode *ptr = l->head;
+
+	if (l->head == NULL)
+	{
+		l->head = l->crnt = Log_AllocNode();
+		Log_SetNode(l->head, &ln->arg, ptr);
+	}else{
+		while(ptr->next != NULL)
+			ptr = ptr->next;
+		ptr->next = l->crnt = Log_AllocNode();
+		Log_SetNode(ptr->next, &ln->arg, NULL);
+	}
 }
 
-void list_init(List *list){
+void list_init(void){
 	list->head = NULL;
 	list->crnt = NULL;
 }
@@ -55,7 +58,7 @@ void SetNode(Node *n, const File_arg *x, Node *next)
 	n->next = next;
 }
 
-void Insert(List *list, const Node *n)
+void Insert(Node *n)
 {
 	Node *ptr = list->head;
 
@@ -71,7 +74,7 @@ void Insert(List *list, const Node *n)
 	}
 }
 
-void Delete(List *list, Node *n)
+void Delete(Node *n)
 {
 	if (list->head != NULL)
 	{
@@ -93,20 +96,40 @@ void Delete(List *list, Node *n)
 	}
 }
 
-void lfs_init()
+void lfs_init(void)
 {
-	Node n;
-	list_init(&list);
+	Node *n;
+	n = AllocNode();
+	list = calloc(1, sizeof(List));
+	list_init();
 
-	Node *ptr = list.head;
-	list.head = list.crnt = AllocNode();
-	strcpy(n.data.f_name, "lfs");
-	n.data.buf = NULL;
-	n.data.size = 0;
-	SetNode(list.head, &n.data, ptr);
+	Node *ptr = list->head;
+	list->head = list->crnt = AllocNode();
+	strcpy(n->data.f_name, "lfs");
+	n->data.buf = NULL;
+	n->data.size = 0;
+	SetNode(list->head, &n->data, ptr);
+
+
+	Lnode *ln;
+	ln = Log_AllocNode();
+	n->l = calloc(1, sizeof(Log_list));
+	Log_init(n->l);
+
+	Lnode *pt = n->l->head;
+	n->l->head = n->l->crnt = Log_AllocNode();
+	ln->arg.oper = mk;
+	ln->arg.path = n->data.f_name;
+	ln->arg.stbuf = NULL;
+	ln->arg.buf = NULL;
+	ln->arg.size = 0;
+	ln->arg.offset = 0;
+	Log_SetNode(n->l->head, &ln->arg, pt);
+
+	free(n);
+	free(ln);
 	free(ptr);
-
-	log_init(&log_list);
+	free(pt);
 }
 
 //get the file name from the path
@@ -153,7 +176,7 @@ int lfs_file_type(const char *path)
 
 	if (strcmp(path, "/") == 0)
 		return LFS_ROOT;
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0)
 			return LFS_FILE;		
@@ -175,7 +198,7 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_nlink = 2;
 		return 0;
 	} else {
-		for (n = list.head; n != NULL; n = n->next)
+		for (n = list->head; n != NULL; n = n->next)
 		{
 			if (strcmp(p, n->data.f_name) == 0){
 				stbuf->st_mode = S_IFREG | 0644;
@@ -202,11 +225,12 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 		return -EEXIST;
 
 	char *p = get_filename(path);
-	Node n;
-	strcpy(n.data.f_name, p);
-	n.data.buf = NULL;
-	n.data.size = 0;
-	Insert(&list, &n);
+	Node *n;
+	n = AllocNode();
+	strcpy(n->data.f_name, p);
+	n->data.buf = NULL;
+	n->data.size = 0;
+	Insert(n);
 
 	return 0;
 }
@@ -217,7 +241,7 @@ static int lfs_unlink(const char *path)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -232,7 +256,7 @@ static int lfs_unlink(const char *path)
 	n->data.buf = NULL;
 	n->data.size = 0;
 
-	Delete(&list, n);
+	Delete(n);
 
 	return 0;
 }
@@ -252,7 +276,7 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -294,7 +318,7 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -332,7 +356,7 @@ static int lfs_truncate(const char *path, off_t size)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -358,7 +382,7 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	for (n = list.head; n != NULL; n = n->next)
+	for (n = list->head; n != NULL; n = n->next)
 	{
 		filler(buf, n->data.f_name, NULL, 0);
 	}

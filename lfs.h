@@ -13,6 +13,52 @@
 
 #define MAXNAME 128
 
+enum {
+	LFS_NONE,
+	LFS_ROOT,
+	LFS_FILE,
+};
+
+enum operations {
+	ga, 		//getattr
+	rdir, 		//readdir
+	mk, 		//mknod
+	unln,		//unlink
+	tru,		//truncate
+	uti,		//utimens
+	op,			//open
+	rd,			//read
+	wr,			//write
+};
+
+
+//loglist information
+typedef struct {
+	enum operations 	oper;
+	char 				*path;
+	struct stat 		*stbuf;
+	char				*buf;
+	size_t				size;
+	off_t				offset;
+	//fuse_file_dir_t		filler;
+}Log_arg;
+
+typedef struct __lnode {
+	Log_arg			arg;
+	struct __lnode 	*next;
+}Lnode;
+
+typedef struct {
+	Lnode *head;
+	Lnode *crnt;
+}Log_list;
+
+void Log_init(Log_list *l);
+Lnode *Log_AllocNode(void);
+void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next);
+void Log_insert(Log_list *l, const Lnode *ln);
+
+
 //filelist
 typedef struct {
 	void		*buf;
@@ -22,6 +68,7 @@ typedef struct {
 
 typedef struct __node {
 	File_arg		data;
+	Log_list 		*l;
 	struct __node 	*next;
 }Node;
 
@@ -30,36 +77,14 @@ typedef struct {
 	Node *crnt;
 }List;
 
-
-void list_init(List *list);
+void list_init(void);
 Node *AllocNode(void);
 void SetNode(Node *n, const File_arg *x, Node *next);
-void Insert(List *list, const Node *n);
-void Delete(List *list, Node *n);
-
-//loglist information
-typedef struct {
-	struct fuse_operations	oper;
-}Log_arg;
-
-typedef struct __lnode {
-	Log_arg			data;
-	struct __lnode 	*next;
-}Lnode;
-
-typedef struct {
-	Lnode *head;
-	Lnode *crnt;
-}Log_list;
-
-
-void log_init(Log_list *log_list);
-Lnode *Log_AllocNode(void);
-void Log_SetNode(Lnode *n, const Log_arg *y, Lnode *next);
-void Log_insert(Log_list *log_list, const Log_arg *y);
+void Insert(Node *n);
+void Delete(Node *n);
 
 //functions
-void lfs_init();
+void lfs_init(void);
 char *get_filename(const char *path);
 int lfs_resize(size_t new_size, Node *n);
 int lfs_expand(size_t new_size, Node *n);
