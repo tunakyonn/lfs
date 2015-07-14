@@ -35,7 +35,7 @@ enum operations {
 //loglist information
 typedef struct {
 	enum operations 	oper;
-	char 				*path;
+	char 				path[MAXNAME];
 	struct stat 		*stbuf;
 	char				*buf;
 	size_t				size;
@@ -54,9 +54,9 @@ typedef struct {
 }Log_list;
 
 void Log_init(Log_list *l);
-Lnode *Log_AllocNode(void);
+Lnode *Log_A(void);
 void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next);
-void Log_insert(Log_list *l, const Lnode *ln);
+void Log_insert(Log_list *l, Lnode *ln);
 
 
 //filelist

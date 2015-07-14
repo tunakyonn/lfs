@@ -26,19 +26,19 @@ void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next)
 	ln->next = next;
 }
 
-void Log_insert(Log_list *l, const Lnode *ln)
+void Log_insert(Log_list *l, Lnode *ln)
 {
-	Lnode *ptr = l->head;
+	Lnode *lptr = l->head;
 
 	if (l->head == NULL)
 	{
 		l->head = l->crnt = Log_AllocNode();
-		Log_SetNode(l->head, &ln->arg, ptr);
+		Log_SetNode(l->head, &ln->arg, lptr);
 	}else{
-		while(ptr->next != NULL)
-			ptr = ptr->next;
-		ptr->next = l->crnt = Log_AllocNode();
-		Log_SetNode(ptr->next, &ln->arg, NULL);
+		while(lptr->next != NULL)
+			lptr = lptr->next;
+		lptr->next = l->crnt = Log_AllocNode();
+		Log_SetNode(lptr->next, &ln->arg, NULL);
 	}
 }
 
@@ -64,7 +64,7 @@ void Insert(Node *n)
 
 	if (list->head == NULL)
 	{
-		list->head = list->crnt = AllocNode();
+		ptr = list->crnt = AllocNode();
 		SetNode(list->head, &n->data, ptr);
 	}else{
 		while(ptr->next != NULL)
@@ -103,33 +103,26 @@ void lfs_init(void)
 	list = calloc(1, sizeof(List));
 	list_init();
 
-	Node *ptr = list->head;
-	list->head = list->crnt = AllocNode();
 	strcpy(n->data.f_name, "lfs");
 	n->data.buf = NULL;
 	n->data.size = 0;
-	SetNode(list->head, &n->data, ptr);
-
+	Insert(n);
 
 	Lnode *ln;
 	ln = Log_AllocNode();
-	n->l = calloc(1, sizeof(Log_list));
-	Log_init(n->l);
+	list->head->l = calloc(1, sizeof(Log_list));
+	Log_init(list->head->l);
 
-	Lnode *pt = n->l->head;
-	n->l->head = n->l->crnt = Log_AllocNode();
 	ln->arg.oper = mk;
-	ln->arg.path = n->data.f_name;
+	strcpy(ln->arg.path, "/lfs");
 	ln->arg.stbuf = NULL;
 	ln->arg.buf = NULL;
 	ln->arg.size = 0;
 	ln->arg.offset = 0;
-	Log_SetNode(n->l->head, &ln->arg, pt);
+	Log_insert(list->head->l, ln);
 
-	free(n);
 	free(ln);
-	free(ptr);
-	free(pt);
+	free(n);
 }
 
 //get the file name from the path
@@ -204,6 +197,17 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 				stbuf->st_mode = S_IFREG | 0644;
 				stbuf->st_nlink = 1;
 				stbuf->st_size = n->data.size;
+
+				/*Lnode *ln;
+				ln = Log_AllocNode();
+				ln->arg.oper = ga;
+				strcpy(ln->arg.path, path);
+				ln->arg.stbuf = stbuf;
+				ln->arg.buf = NULL;
+				ln->arg.size = 0;
+				ln->arg.offset = 0;
+				Log_insert(n->l, ln);
+				free(ln);*/
 				return 0;
 			}
 		}
@@ -225,12 +229,12 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 		return -EEXIST;
 
 	char *p = get_filename(path);
-	Node *n;
-	n = AllocNode();
+	Node *n = AllocNode();
 	strcpy(n->data.f_name, p);
 	n->data.buf = NULL;
 	n->data.size = 0;
 	Insert(n);
+	free(n);
 
 	return 0;
 }
@@ -266,7 +270,32 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
+/*
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
 
+	for (n = list->head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			Lnode *ln;
+			ln = Log_AllocNode();
+			ln->arg.oper = op;
+			strcpy(ln->arg.path, path);
+			ln->arg.stbuf = NULL;
+			ln->arg.buf = NULL;
+			ln->arg.size = 0;
+			ln->arg.offset = 0;
+			Log_insert(n->l, ln);
+			free(ln);
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+*/
 	return 0;
 }
 
