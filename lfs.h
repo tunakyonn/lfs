@@ -68,8 +68,8 @@ typedef struct {
 
 typedef struct __node {
 	File_arg		data;
-	Log_list 		*l;
 	struct __node 	*next;
+	Log_list 		*l;
 }Node;
 
 typedef struct {
@@ -77,14 +77,14 @@ typedef struct {
 	Node *crnt;
 }List;
 
-void list_init(void);
+void list_init(List *list);
 Node *AllocNode(void);
-void SetNode(Node *n, const File_arg *x, Node *next);
-void Insert(Node *n);
-void Delete(Node *n);
+void SetNode(Node *n, File_arg *x, Node *next);
+void Insert(List *list, File_arg data);
+void Delete(List *list, Node *n);
 
 //functions
-void lfs_init(void);
+void lfs_init(List *list);
 char *get_filename(const char *path);
 int lfs_resize(size_t new_size, Node *n);
 int lfs_expand(size_t new_size, Node *n);

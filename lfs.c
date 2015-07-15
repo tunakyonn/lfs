@@ -6,7 +6,7 @@
 
 #include "lfs.h"
 
-static List *list;
+static List list;
 //static Log_list l;
 
 void Log_init(Log_list *l)
@@ -42,7 +42,7 @@ void Log_insert(Log_list *l, Lnode *ln)
 	}
 }
 
-void list_init(void){
+void list_init(List *list){
 	list->head = NULL;
 	list->crnt = NULL;
 }
@@ -52,19 +52,19 @@ Node *AllocNode(void)
 	return calloc(1, sizeof(Node));
 }
 
-void SetNode(Node *n, const File_arg *x, Node *next)
+void SetNode(Node *n, File_arg *x, Node *next)
 {
 	n->data = *x;
 	n->next = next;
 }
 
-void Insert(Node *n)
+void Insert(List *list, Node *n)
 {
 	Node *ptr = list->head;
 
 	if (list->head == NULL)
 	{
-		ptr = list->crnt = AllocNode();
+		list->head = list->crnt = AllocNode();
 		SetNode(list->head, &n->data, ptr);
 	}else{
 		while(ptr->next != NULL)
@@ -74,7 +74,7 @@ void Insert(Node *n)
 	}
 }
 
-void Delete(Node *n)
+void Delete(List *list, Node *n)
 {
 	if (list->head != NULL)
 	{
@@ -96,17 +96,16 @@ void Delete(Node *n)
 	}
 }
 
-void lfs_init(void)
+void lfs_init(List *list)
 {
 	Node *n;
 	n = AllocNode();
-	list = calloc(1, sizeof(List));
-	list_init();
+	list_init(list);
 
 	strcpy(n->data.f_name, "lfs");
 	n->data.buf = NULL;
 	n->data.size = 0;
-	Insert(n);
+	Insert(list, n);
 
 	Lnode *ln;
 	ln = Log_AllocNode();
@@ -169,7 +168,7 @@ int lfs_file_type(const char *path)
 
 	if (strcmp(path, "/") == 0)
 		return LFS_ROOT;
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0)
 			return LFS_FILE;		
@@ -191,14 +190,14 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_nlink = 2;
 		return 0;
 	} else {
-		for (n = list->head; n != NULL; n = n->next)
+		for (n = list.head; n != NULL; n = n->next)
 		{
 			if (strcmp(p, n->data.f_name) == 0){
 				stbuf->st_mode = S_IFREG | 0644;
 				stbuf->st_nlink = 1;
 				stbuf->st_size = n->data.size;
-
-				/*Lnode *ln;
+/*
+				Lnode *ln;
 				ln = Log_AllocNode();
 				ln->arg.oper = ga;
 				strcpy(ln->arg.path, path);
@@ -233,7 +232,7 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 	strcpy(n->data.f_name, p);
 	n->data.buf = NULL;
 	n->data.size = 0;
-	Insert(n);
+	Insert(&list, n);
 	free(n);
 
 	return 0;
@@ -245,7 +244,7 @@ static int lfs_unlink(const char *path)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -260,7 +259,7 @@ static int lfs_unlink(const char *path)
 	n->data.buf = NULL;
 	n->data.size = 0;
 
-	Delete(n);
+	Delete(&list, n);
 
 	return 0;
 }
@@ -270,12 +269,12 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
-/*
+
 	Node *n;
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			Lnode *ln;
@@ -295,7 +294,7 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 
 	if (init == 0)
 		return -ENOENT;
-*/
+
 	return 0;
 }
 
@@ -305,7 +304,7 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -347,7 +346,7 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -385,7 +384,7 @@ static int lfs_truncate(const char *path, off_t size)
 	char *p = get_filename(path);
 	int init = 0;
 
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
 			init += 1;
@@ -411,7 +410,7 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	for (n = list->head; n != NULL; n = n->next)
+	for (n = list.head; n != NULL; n = n->next)
 	{
 		filler(buf, n->data.f_name, NULL, 0);
 	}
@@ -433,6 +432,6 @@ static struct fuse_operations lfs_oper = {
 
 int main(int argc, char *argv[])
 {
-	lfs_init();
+	lfs_init(&list);
 	return fuse_main(argc, argv, &lfs_oper, NULL);
 }
