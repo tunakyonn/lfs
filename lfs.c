@@ -7,6 +7,7 @@
 #include "lfs.h"
 
 static List list;
+static int log_read = 0;
 
 void Log_init(Log_list *l)
 {
@@ -125,7 +126,7 @@ void lfs_init(List *list)
 //get the file name from the path
 char *get_filename(const char *path)
 {
-	char *p = (char*)malloc(sizeof(char) * 127);
+	char *p = (char*)malloc(sizeof(char));
 	 
     strcpy(p, path);
     p = p + 1;
@@ -139,7 +140,8 @@ int lfs_resize(size_t new_size, Node *n)
 	if (new_size == n->data.size)
 		return 0;
 
-	new_buf = realloc(n->data.buf, new_size);
+	//new_buf = realloc(n->data.buf, new_size);
+	new_buf = malloc(sizeof(new_size));
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
@@ -195,16 +197,19 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 				stbuf->st_nlink = 1;
 				stbuf->st_size = n->data.size;
 
-				Lnode *ln;
-				ln = Log_AllocNode();
-				ln->arg.oper = ga;
-				strcpy(ln->arg.path, path);
-				ln->arg.stbuf = stbuf;
-				ln->arg.buf = NULL;
-				ln->arg.size = 0;
-				ln->arg.offset = 0;
-				Log_insert(&n->l, ln);
-				free(ln);
+				if (log_read == 0)
+				{
+					Lnode *ln;
+					ln = Log_AllocNode();
+					ln->arg.oper = ga;
+					strcpy(ln->arg.path, path);
+					ln->arg.stbuf = stbuf;
+					ln->arg.buf = NULL;
+					ln->arg.size = 0;
+					ln->arg.offset = 0;
+					Log_insert(&n->l, ln);
+					free(ln);
+				}
 				return 0;
 			}
 		}
@@ -212,8 +217,36 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 	return -ENOENT;
 }
 
-static int lfs_utimens(const char *path, const struct timespec ts[2])
+static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+			off_t offset, struct fuse_file_info *fi)
 {
+	(void) fi;
+	(void) offset;
+
+	if (lfs_file_type(path) != LFS_ROOT)
+		return -ENOENT;
+
+	Node *n;
+
+	filler(buf, ".", NULL, 0);
+	filler(buf, "..", NULL, 0);
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		filler(buf, n->data.f_name, NULL, 0);
+		if (log_read == 0)
+		{
+			Lnode *ln;
+			ln = Log_AllocNode();
+			ln->arg.oper = rdir;
+			strcpy(ln->arg.path, path);
+			ln->arg.stbuf = NULL;
+			ln->arg.buf = buf;
+			ln->arg.size = 0;
+			ln->arg.offset = 0;
+			Log_insert(&n->l, ln);
+			free(ln);
+		}
+	}
 	return 0;
 }
 
@@ -228,22 +261,25 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 	char *p = get_filename(path);
 	Node *n = AllocNode();
 
-	Lnode *ln;
-	ln = Log_AllocNode();
-	ln->arg.oper = mk;
-	strcpy(ln->arg.path, path);
-	ln->arg.stbuf = NULL;
-	ln->arg.buf = NULL;
-	ln->arg.size = 0;
-	ln->arg.offset = 0;
-	Log_insert(&n->l, ln);
+	if (log_read == 0)
+	{
+		Lnode *ln;
+		ln = Log_AllocNode();
+		ln->arg.oper = mk;
+		strcpy(ln->arg.path, path);
+		ln->arg.stbuf = NULL;
+		ln->arg.buf = NULL;
+		ln->arg.size = 0;
+		ln->arg.offset = 0;
+		Log_insert(&n->l, ln);
+		free(ln);
+	}
 
 	strcpy(n->data.f_name, p);
 	n->data.buf = NULL;
 	n->data.size = 0;
 	Insert(&list, n);
 
-	free(ln);
 	free(n);
 
 	return 0;
@@ -258,16 +294,19 @@ static int lfs_unlink(const char *path)
 	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
-			Lnode *ln;
-			ln = Log_AllocNode();
-			ln->arg.oper = ga;
-			strcpy(ln->arg.path, path);
-			ln->arg.stbuf = NULL;
-			ln->arg.buf = NULL;
-			ln->arg.size = 0;
-			ln->arg.offset = 0;
-			Log_insert(&n->l, ln);
-			free(ln);
+			if (log_read == 0)
+			{
+				Lnode *ln;
+				ln = Log_AllocNode();
+				ln->arg.oper = unln;
+				strcpy(ln->arg.path, path);
+				ln->arg.stbuf = NULL;
+				ln->arg.buf = NULL;
+				ln->arg.size = 0;
+				ln->arg.offset = 0;
+				Log_insert(&n->l, ln);
+				free(ln);
+			}
 			init += 1;
 			break;
 		}
@@ -283,129 +322,6 @@ static int lfs_unlink(const char *path)
 	Delete(&list, n);
 
 	return 0;
-}
-
-
-static int lfs_open(const char *path, struct fuse_file_info *fi)
-{
-	if (lfs_file_type(path) == LFS_NONE)
-		return -ENOENT;
-
-	Node *n;
-	char *p = get_filename(path);
-	int init = 0;
-
-	for (n = list.head; n != NULL; n = n->next)
-	{
-		if (strcmp(p, n->data.f_name) == 0){
-			Lnode *ln;
-			ln = Log_AllocNode();
-			ln->arg.oper = op;
-			strcpy(ln->arg.path, path);
-			ln->arg.stbuf = NULL;
-			ln->arg.buf = NULL;
-			ln->arg.size = 0;
-			ln->arg.offset = 0;
-			Log_insert(&n->l, ln);
-			free(ln);
-			init += 1;
-			break;
-		}
-	}
-
-	if (init == 0)
-		return -ENOENT;
-
-	return 0;
-}
-
-int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
-{
-	Node *n;
-	char *p = get_filename(path);
-	int init = 0;
-
-	for (n = list.head; n != NULL; n = n->next)
-	{
-		if (strcmp(p, n->data.f_name) == 0){
-			init += 1;
-			break;
-		}
-	}
-
-	if (init == 0)
-		return -ENOENT;
-
-	if (n->data.buf == NULL && n->data.size == 0)
-		lfs_resize(0, n);
-
-	if (offset >= n->data.size)
-		return 0;
-
-	if (size > n->data.size - offset)
-		size = n->data.size - offset;
-
-	memcpy(buf, n->data.buf + offset, size);
-
-	return size;
-}
-
-static int lfs_read(const char *path, char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
-{
-	(void) fi;
-
-	if (lfs_file_type(path) != LFS_FILE)
-		return -EINVAL;
-
-	return lfs_do_read(path, buf, size, offset);
-}
-
-int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
-{
-	Node *n;
-	char *p = get_filename(path);
-	int init = 0;
-
-	for (n = list.head; n != NULL; n = n->next)
-	{
-		if (strcmp(p, n->data.f_name) == 0){
-			init += 1;
-			break;
-		}
-	}
-	if (init == 0)
-		return -ENOENT;
-
-	if (lfs_expand(offset + size, n))
-		return -ENOMEM;
-
-	Lnode *ln;
-	ln = Log_AllocNode();
-	ln->arg.buf = calloc(1, sizeof(char*));
-	ln->arg.oper = wr;
-	strcpy(ln->arg.path, path);
-	ln->arg.stbuf = NULL;
-	strcpy(ln->arg.buf, buf);
-	ln->arg.size = size;
-	ln->arg.offset = offset;
-	Log_insert(&n->l, ln);
-	free(ln);
-
-	memcpy(n->data.buf + offset, buf, size);
-
-	return size;
-}
-
-static int lfs_write(const char *path, const char *buf, size_t size,
-		      off_t offset, struct fuse_file_info *fi)
-{
-	(void) fi;
-
-	if (lfs_file_type(path) != LFS_FILE)
-		return -EINVAL;
-
-	return lfs_do_write(path, buf, size, offset);
 }
 
 static int lfs_truncate(const char *path, off_t size)
@@ -427,28 +343,203 @@ static int lfs_truncate(const char *path, off_t size)
 	if (init == 0)
 		return -ENOENT;
 
+	if (log_read == 0)
+	{
+		Lnode *ln;
+		ln = Log_AllocNode();
+		ln->arg.oper = tru;
+		strcpy(ln->arg.path, path);
+		ln->arg.stbuf = NULL;
+		ln->arg.buf = NULL;
+		ln->arg.size = size;
+		ln->arg.offset = 0;
+		Log_insert(&n->l, ln);
+		free(ln);
+	}
+
 	return lfs_resize(size, n);
 }
 
-static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			off_t offset, struct fuse_file_info *fi)
+static int lfs_utimens(const char *path, const struct timespec ts[2])
+{
+	return 0;
+}
+
+static int lfs_open(const char *path, struct fuse_file_info *fi)
 {
 	(void) fi;
-	(void) offset;
 
-	if (lfs_file_type(path) != LFS_ROOT)
+	if (lfs_file_type(path) == LFS_NONE)
 		return -ENOENT;
 
 	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
 
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
 	for (n = list.head; n != NULL; n = n->next)
 	{
-		filler(buf, n->data.f_name, NULL, 0);
+		if (strcmp(p, n->data.f_name) == 0){
+			if (log_read == 0)
+			{
+				Lnode *ln;
+				ln = Log_AllocNode();
+				ln->arg.oper = op;
+				strcpy(ln->arg.path, path);
+				ln->arg.stbuf = NULL;
+				ln->arg.buf = NULL;
+				ln->arg.size = 0;
+				ln->arg.offset = 0;
+				Log_insert(&n->l, ln);
+				free(ln);
+			}
+			init += 1;
+			break;
+		}
 	}
 
+	if (init == 0)
+		return -ENOENT;
+
 	return 0;
+}
+
+int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
+{
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+	if (init == 0)
+		return -ENOENT;
+
+	if (lfs_expand(offset + size, n))
+		return -ENOMEM;
+
+	if (log_read == 0)
+	{
+		Lnode *ln;
+		ln = Log_AllocNode();
+		ln->arg.buf = malloc(sizeof(char));
+		ln->arg.oper = wr;
+		strcpy(ln->arg.path, path);
+		ln->arg.stbuf = NULL;
+		strcpy(ln->arg.buf, buf);
+		ln->arg.size = size;
+		ln->arg.offset = offset;
+		Log_insert(&n->l, ln);
+		free(ln);
+	}
+
+	memcpy(n->data.buf + offset, buf, size);
+
+	return size;
+}
+
+static int lfs_write(const char *path, const char *buf, size_t size,
+		      off_t offset, struct fuse_file_info *fi)
+{
+	(void) fi;
+
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
+
+	return lfs_do_write(path, buf, size, offset);
+}
+
+
+int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
+{
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+
+	Lnode *ln;
+	//struct fuse_file_info *fi;
+	//fi = 0;
+	log_read = 1;
+	n->data.buf = NULL;
+	n->data.size = 0;
+
+	for (ln = n->l.head; ln != NULL; ln = ln->next)
+	{
+		switch (ln->arg.oper) {
+			case ga:
+				//lfs_getattr(ln->arg.path, ln->arg.stbuf);
+				break;
+			case rdir:
+				//lfs_readdir(ln->arg.path, ln->arg.buf, filler, ln->arg.offset, fi);
+				break;
+			case mk:
+				//strcpy(n->data.f_name, p);
+				//n->data.buf = NULL;
+				//n->data.size = 0;
+				break;
+			case unln:
+				lfs_unlink(ln->arg.path);
+				break;
+			case tru:
+				lfs_truncate(ln->arg.path, ln->arg.size);
+				break;
+			case uti:
+				lfs_utimens(ln->arg.path, 0);
+				break;
+			case op:
+				lfs_open(ln->arg.path, NULL);
+				break;
+			case rd:
+				break;
+			case wr:
+				lfs_write(ln->arg.path, ln->arg.buf, ln->arg.size, ln->arg.offset, NULL);
+				//buf = ln->arg.buf;
+				//size = ln->arg.size;
+				//offset = ln->arg.offset;
+				break;
+			default:
+				return printf("ERROR\n");
+				break;
+		}
+	}
+
+	log_read = 0;
+
+	if (offset >= n->data.size)
+		return 0;
+
+	if (size > n->data.size - offset)
+		size = n->data.size - offset;
+
+	memcpy(buf, n->data.buf + offset, size);
+
+	return size;
+}
+
+static int lfs_read(const char *path, char *buf, size_t size,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	(void) fi;
+
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
+
+	return lfs_do_read(path, buf, size, offset);
 }
 
 static struct fuse_operations lfs_oper = {
