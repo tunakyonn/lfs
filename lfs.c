@@ -7,7 +7,6 @@
 #include "lfs.h"
 
 static List list;
-//static Log_list l;
 
 void Log_init(Log_list *l)
 {
@@ -109,8 +108,7 @@ void lfs_init(List *list)
 
 	Lnode *ln;
 	ln = Log_AllocNode();
-	list->head->l = calloc(1, sizeof(Log_list));
-	Log_init(list->head->l);
+	Log_init(&list->head->l);
 
 	ln->arg.oper = mk;
 	strcpy(ln->arg.path, "/lfs");
@@ -118,7 +116,7 @@ void lfs_init(List *list)
 	ln->arg.buf = NULL;
 	ln->arg.size = 0;
 	ln->arg.offset = 0;
-	Log_insert(list->head->l, ln);
+	Log_insert(&list->head->l, ln);
 
 	free(ln);
 	free(n);
@@ -196,7 +194,7 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 				stbuf->st_mode = S_IFREG | 0644;
 				stbuf->st_nlink = 1;
 				stbuf->st_size = n->data.size;
-/*
+
 				Lnode *ln;
 				ln = Log_AllocNode();
 				ln->arg.oper = ga;
@@ -205,8 +203,8 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 				ln->arg.buf = NULL;
 				ln->arg.size = 0;
 				ln->arg.offset = 0;
-				Log_insert(n->l, ln);
-				free(ln);*/
+				Log_insert(&n->l, ln);
+				free(ln);
 				return 0;
 			}
 		}
@@ -229,10 +227,23 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 
 	char *p = get_filename(path);
 	Node *n = AllocNode();
+
+	Lnode *ln;
+	ln = Log_AllocNode();
+	ln->arg.oper = mk;
+	strcpy(ln->arg.path, path);
+	ln->arg.stbuf = NULL;
+	ln->arg.buf = NULL;
+	ln->arg.size = 0;
+	ln->arg.offset = 0;
+	Log_insert(&n->l, ln);
+
 	strcpy(n->data.f_name, p);
 	n->data.buf = NULL;
 	n->data.size = 0;
 	Insert(&list, n);
+
+	free(ln);
 	free(n);
 
 	return 0;
@@ -247,6 +258,16 @@ static int lfs_unlink(const char *path)
 	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
+			Lnode *ln;
+			ln = Log_AllocNode();
+			ln->arg.oper = ga;
+			strcpy(ln->arg.path, path);
+			ln->arg.stbuf = NULL;
+			ln->arg.buf = NULL;
+			ln->arg.size = 0;
+			ln->arg.offset = 0;
+			Log_insert(&n->l, ln);
+			free(ln);
 			init += 1;
 			break;
 		}
@@ -285,7 +306,7 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 			ln->arg.buf = NULL;
 			ln->arg.size = 0;
 			ln->arg.offset = 0;
-			Log_insert(n->l, ln);
+			Log_insert(&n->l, ln);
 			free(ln);
 			init += 1;
 			break;
@@ -358,6 +379,18 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 
 	if (lfs_expand(offset + size, n))
 		return -ENOMEM;
+
+	Lnode *ln;
+	ln = Log_AllocNode();
+	ln->arg.buf = calloc(1, sizeof(char*));
+	ln->arg.oper = wr;
+	strcpy(ln->arg.path, path);
+	ln->arg.stbuf = NULL;
+	strcpy(ln->arg.buf, buf);
+	ln->arg.size = size;
+	ln->arg.offset = offset;
+	Log_insert(&n->l, ln);
+	free(ln);
 
 	memcpy(n->data.buf + offset, buf, size);
 

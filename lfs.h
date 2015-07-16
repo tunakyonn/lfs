@@ -69,7 +69,7 @@ typedef struct {
 typedef struct __node {
 	File_arg		data;
 	struct __node 	*next;
-	Log_list 		*l;
+	Log_list 		l;
 }Node;
 
 typedef struct {
