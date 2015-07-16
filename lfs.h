@@ -80,7 +80,7 @@ typedef struct {
 void list_init(List *list);
 Node *AllocNode(void);
 void SetNode(Node *n, File_arg *x, Node *next);
-void Insert(List *list, File_arg data);
+void Insert(List *list, Node *n);
 void Delete(List *list, Node *n);
 
 //functions
