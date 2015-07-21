@@ -472,62 +472,58 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 		return -ENOENT;
 
 	Lnode *ln;
-	//struct fuse_file_info *fi;
-	//fi = 0;
 	log_read = 1;
-	n->data.buf = NULL;
-	n->data.size = 0;
 
+	Node *s = AllocNode();
+	s->data.buf = NULL;
+	s->data.size = 0;
+	strcpy(s->data.f_name, path);
+/*
+	//reverse
+	Lnode *q = n->l.head;
+	Lnode *work = NULL;
+	Lnode *tmp;
+
+	while(q != NULL){
+		tmp = q->next;
+		q->next = work;
+		work = q;
+		q = tmp;
+	}
+	n->l.head = work;
+*/
 	for (ln = n->l.head; ln != NULL; ln = ln->next)
 	{
 		switch (ln->arg.oper) {
-			case ga:
-				//lfs_getattr(ln->arg.path, ln->arg.stbuf);
-				break;
-			case rdir:
-				//lfs_readdir(ln->arg.path, ln->arg.buf, filler, ln->arg.offset, fi);
-				break;
-			case mk:
-				//strcpy(n->data.f_name, p);
-				//n->data.buf = NULL;
-				//n->data.size = 0;
-				break;
-			case unln:
-				lfs_unlink(ln->arg.path);
-				break;
-			case tru:
-				lfs_truncate(ln->arg.path, ln->arg.size);
-				break;
-			case uti:
-				lfs_utimens(ln->arg.path, 0);
-				break;
-			case op:
-				lfs_open(ln->arg.path, NULL);
-				break;
-			case rd:
-				break;
 			case wr:
-				lfs_write(ln->arg.path, ln->arg.buf, ln->arg.size, ln->arg.offset, NULL);
-				//buf = ln->arg.buf;
-				//size = ln->arg.size;
+				//lfs_write(ln->arg.path, ln->arg.buf, ln->arg.size, ln->arg.offset, NULL);
+				s->data.buf = ln->arg.buf;
+				s->data.size = ln->arg.size;
 				//offset = ln->arg.offset;
+				//if (ln->arg.offset >= s->data.size)
+				//	return 0;
+				if (ln->arg.size > s->data.size - ln->arg.offset)
+					ln->arg.size = s->data.size - ln->arg.offset;
+				memcpy(buf, s->data.buf + offset, size);
+				//log_read = 0;
+				//return size;
 				break;
 			default:
-				return printf("ERROR\n");
 				break;
 		}
 	}
 
 	log_read = 0;
-
+	//free(s);
+/*
 	if (offset >= n->data.size)
 		return 0;
 
 	if (size > n->data.size - offset)
 		size = n->data.size - offset;
 
-	memcpy(buf, n->data.buf + offset, size);
-
+	memcpy(buf, s->data.buf + offset, size);
+*/
 	return size;
 }
 
