@@ -37,10 +37,9 @@ typedef struct {
 	enum operations 	oper;
 	char 				path[MAXNAME];
 	struct stat 		*stbuf;
-	char				*buf;
+	void				*buf;
 	size_t				size;
 	off_t				offset;
-	//fuse_file_dir_t		filler;
 }Log_arg;
 
 typedef struct __lnode {
@@ -53,6 +52,7 @@ typedef struct {
 	Lnode *crnt;
 }Log_list;
 
+void Log_reverse(Log_list *l);
 void Log_init(Log_list *l);
 Lnode *Log_AllocNode(void);
 void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next);

@@ -9,6 +9,21 @@
 static List list;
 static int log_read = 0;
 
+void Log_reverse(Log_list *l)
+{
+	Lnode *q = l->head;
+	Lnode *work = NULL;
+	Lnode *tmp;
+
+	while(q != NULL){
+		tmp = q->next;
+		q->next = work;
+		work = q;
+		q = tmp;
+	}
+	l->head = work;
+}
+
 void Log_init(Log_list *l)
 {
 	l->head = NULL;
@@ -150,6 +165,8 @@ int lfs_resize(size_t new_size, Node *n)
 
 	n->data.buf = new_buf;
 	n->data.size = new_size;
+
+	//free(new_buf);
 
 	return 0;
 }
@@ -426,7 +443,7 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	{
 		Lnode *ln;
 		ln = Log_AllocNode();
-		ln->arg.buf = malloc(sizeof(char));
+		ln->arg.buf = (char*)malloc(sizeof(char));
 		ln->arg.oper = wr;
 		strcpy(ln->arg.path, path);
 		ln->arg.stbuf = NULL;
@@ -475,55 +492,33 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	log_read = 1;
 
 	Node *s = AllocNode();
-	s->data.buf = NULL;
-	s->data.size = 0;
-	strcpy(s->data.f_name, path);
-/*
-	//reverse
-	Lnode *q = n->l.head;
-	Lnode *work = NULL;
-	Lnode *tmp;
+	s->data.buf = (char*)malloc(sizeof(char));
+	//s->data.size = 0;
+	//strcpy(s->data.f_name, path);
 
-	while(q != NULL){
-		tmp = q->next;
-		q->next = work;
-		work = q;
-		q = tmp;
-	}
-	n->l.head = work;
-*/
+	//Log_reverse(&n->l);
 	for (ln = n->l.head; ln != NULL; ln = ln->next)
 	{
 		switch (ln->arg.oper) {
 			case wr:
-				//lfs_write(ln->arg.path, ln->arg.buf, ln->arg.size, ln->arg.offset, NULL);
-				s->data.buf = ln->arg.buf;
-				s->data.size = ln->arg.size;
-				//offset = ln->arg.offset;
-				//if (ln->arg.offset >= s->data.size)
-				//	return 0;
-				if (ln->arg.size > s->data.size - ln->arg.offset)
-					ln->arg.size = s->data.size - ln->arg.offset;
-				memcpy(buf, s->data.buf + offset, size);
-				//log_read = 0;
-				//return size;
+				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
 				break;
 			default:
 				break;
 		}
 	}
 
+	//Log_reverse(&n->l);
 	log_read = 0;
-	//free(s);
 /*
-	if (offset >= n->data.size)
+	if (offset >= s->data.size)
 		return 0;
-
-	if (size > n->data.size - offset)
-		size = n->data.size - offset;
-
-	memcpy(buf, s->data.buf + offset, size);
+	if (size > s->data.size - offset)
+		size = s->data.size - offset;
 */
+	memcpy(buf, s->data.buf + offset, size);
+	free(s);
+
 	return size;
 }
 
