@@ -157,7 +157,7 @@ int lfs_resize(size_t new_size, Node *n)
 		return 0;
 
 	//new_buf = realloc(n->data.buf, new_size);
-	new_buf = (void *)calloc(1, sizeof(new_size));
+	new_buf = malloc(sizeof(new_size));
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
@@ -167,7 +167,7 @@ int lfs_resize(size_t new_size, Node *n)
 	n->data.buf = new_buf;
 	n->data.size = new_size;
 
-	free(new_buf);
+	//free(new_buf);
 
 	return 0;
 }
@@ -258,7 +258,7 @@ static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			ln->arg.oper = rdir;
 			strcpy(ln->arg.path, path);
 			ln->arg.stbuf = NULL;
-			ln->arg.buf = buf;
+			ln->arg.buf = 0;
 			ln->arg.size = 0;
 			ln->arg.offset = 0;
 			Log_insert(&n->l, ln);
@@ -396,7 +396,8 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 
 	for (n = list.head; n != NULL; n = n->next)
 	{
-		if (strcmp(p, n->data.f_name) == 0){
+		if (strcmp(p, n->data.f_name) == 0)
+		{
 			if (log_read == 0)
 			{
 				Lnode *ln;
@@ -419,6 +420,76 @@ static int lfs_open(const char *path, struct fuse_file_info *fi)
 		return -ENOENT;
 
 	return 0;
+}
+
+int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
+{
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+
+	Lnode *ln;
+	log_read = 1;
+
+	Node *s = AllocNode();
+	s->data.buf = (char*)malloc(sizeof(char));
+	s->data.size = 0;
+	//strcpy(s->data.f_name, path);
+
+	//Log_reverse(&n->l);
+	for (ln = n->l.head; ln != NULL; ln = ln->next)
+	{
+		switch (ln->arg.oper) {
+			case tru:
+				lfs_resize(ln->arg.size, s);
+			case wr:
+				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
+				//size = ln->arg.size;
+				//offset = ln->arg.offset;
+				break;
+			default:
+				break;
+		}
+	}
+
+	//Log_reverse(&n->l);
+
+	if (s->data.buf == NULL && s->data.size == 0)
+		lfs_resize(0, s);
+
+	//if (offset >= s->data.size)
+	//	return 0;
+	//if (size > s->data.size - offset)
+	//	size = s->data.size - offset;
+
+	log_read = 0;
+
+	memcpy(buf, s->data.buf + offset, size);
+	free(s);
+
+	return size;
+}
+
+static int lfs_read(const char *path, char *buf, size_t size,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	(void) fi;
+
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
+
+	return lfs_do_read(path, buf, size, offset);
 }
 
 int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
@@ -469,71 +540,6 @@ static int lfs_write(const char *path, const char *buf, size_t size,
 		return -EINVAL;
 
 	return lfs_do_write(path, buf, size, offset);
-}
-
-
-int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
-{
-	Node *n;
-	char *p = get_filename(path);
-	int init = 0;
-
-	for (n = list.head; n != NULL; n = n->next)
-	{
-		if (strcmp(p, n->data.f_name) == 0){
-			init += 1;
-			break;
-		}
-	}
-
-	if (init == 0)
-		return -ENOENT;
-
-	Lnode *ln;
-	log_read = 1;
-
-	Node *s = AllocNode();
-	s->data.buf = (char*)malloc(sizeof(char));
-	s->data.size = 0;
-	//strcpy(s->data.f_name, path);
-
-	//Log_reverse(&n->l);
-	for (ln = n->l.head; ln != NULL; ln = ln->next)
-	{
-		switch (ln->arg.oper) {
-			case tru:
-				lfs_expand(ln->arg.offset + ln->arg.size, s);
-			case wr:
-				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
-				break;
-			default:
-				break;
-		}
-	}
-
-	//Log_reverse(&n->l);
-	log_read = 0;
-/*
-	if (offset >= s->data.size)
-		return 0;
-	if (size > s->data.size - offset)
-		size = s->data.size - offset;
-*/
-	memcpy(buf, s->data.buf + offset, size);
-	free(s);
-
-	return size;
-}
-
-static int lfs_read(const char *path, char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
-{
-	(void) fi;
-
-	if (lfs_file_type(path) != LFS_FILE)
-		return -EINVAL;
-
-	return lfs_do_read(path, buf, size, offset);
 }
 
 static struct fuse_operations lfs_oper = {
