@@ -57,7 +57,8 @@ void Log_insert(Log_list *l, Lnode *ln)
 	}
 }
 
-void list_init(List *list){
+void list_init(List *list)
+{
 	list->head = NULL;
 	list->crnt = NULL;
 }
@@ -156,7 +157,7 @@ int lfs_resize(size_t new_size, Node *n)
 		return 0;
 
 	//new_buf = realloc(n->data.buf, new_size);
-	new_buf = malloc(sizeof(new_size));
+	new_buf = (void *)calloc(1, sizeof(new_size));
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
@@ -166,7 +167,7 @@ int lfs_resize(size_t new_size, Node *n)
 	n->data.buf = new_buf;
 	n->data.size = new_size;
 
-	//free(new_buf);
+	free(new_buf);
 
 	return 0;
 }
@@ -493,13 +494,15 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 
 	Node *s = AllocNode();
 	s->data.buf = (char*)malloc(sizeof(char));
-	//s->data.size = 0;
+	s->data.size = 0;
 	//strcpy(s->data.f_name, path);
 
 	//Log_reverse(&n->l);
 	for (ln = n->l.head; ln != NULL; ln = ln->next)
 	{
 		switch (ln->arg.oper) {
+			case tru:
+				lfs_expand(ln->arg.offset + ln->arg.size, s);
 			case wr:
 				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
 				break;
