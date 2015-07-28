@@ -9,21 +9,6 @@
 static List list;
 static int log_read = 0;
 
-void Log_reverse(Log_list *l)
-{
-	Lnode *q = l->head;
-	Lnode *work = NULL;
-	Lnode *tmp;
-
-	while(q != NULL){
-		tmp = q->next;
-		q->next = work;
-		work = q;
-		q = tmp;
-	}
-	l->head = work;
-}
-
 void Log_init(Log_list *l)
 {
 	l->head = NULL;
@@ -142,7 +127,7 @@ void lfs_init(List *list)
 //get the file name from the path
 char *get_filename(const char *path)
 {
-	char *p = (char*)malloc(sizeof(char));
+	char *p = (char*)malloc(127 * sizeof(char));
 	 
     strcpy(p, path);
     p = p + 1;
@@ -156,8 +141,8 @@ int lfs_resize(size_t new_size, Node *n)
 	if (new_size == n->data.size)
 		return 0;
 
-	//new_buf = realloc(n->data.buf, new_size);
-	new_buf = malloc(sizeof(new_size));
+	new_buf = realloc(n->data.buf, new_size);
+	//new_buf = malloc(sizeof(new_size));
 	if (!new_buf && new_size)
 		return -ENOMEM;
 
@@ -440,22 +425,27 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 		return -ENOENT;
 
 	Lnode *ln;
-	log_read = 1;
+	//log_read = 1;
 
 	Node *s = AllocNode();
-	s->data.buf = (char*)malloc(sizeof(char));
-	s->data.size = 0;
-	//strcpy(s->data.f_name, path);
+	s->data.buf = (char *)calloc(size,sizeof(char));
+	lfs_resize(0, s);
 
-	//Log_reverse(&n->l);
+	//s->data.buf = NULL;
+	//s->data.size = 0;
+
 	for (ln = n->l.head; ln != NULL; ln = ln->next)
 	{
 		switch (ln->arg.oper) {
 			case tru:
 				lfs_resize(ln->arg.size, s);
+				break;
 			case wr:
+				fprintf(stderr, "CHECK3\n");
 				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
-				//size = ln->arg.size;
+				printf("%d\n", (int)ln->arg.size);
+				//s_size += ln->arg.size;
+				log_read++;
 				//offset = ln->arg.offset;
 				break;
 			default:
@@ -463,20 +453,23 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 		}
 	}
 
-	//Log_reverse(&n->l);
-
-	if (s->data.buf == NULL && s->data.size == 0)
-		lfs_resize(0, s);
+	if (log_read == 0)
+	{
+		size = 0;
+		fprintf(stderr, "CHECK2\n");
+		return size;
+	}
 
 	//if (offset >= s->data.size)
 	//	return 0;
 	//if (size > s->data.size - offset)
 	//	size = s->data.size - offset;
 
-	log_read = 0;
-
-	memcpy(buf, s->data.buf + offset, size);
+	//memcpy(buf, s->data.buf + offset, size);
+	strcpy(buf, s->data.buf);
 	free(s);
+	fprintf(stderr, "CHECK1\n");
+	log_read = 0;
 
 	return size;
 }
@@ -515,11 +508,11 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	{
 		Lnode *ln;
 		ln = Log_AllocNode();
-		ln->arg.buf = (char*)malloc(sizeof(char));
+		ln->arg.buf = (char *)calloc(size,sizeof(char));
 		ln->arg.oper = wr;
 		strcpy(ln->arg.path, path);
 		ln->arg.stbuf = NULL;
-		strcpy(ln->arg.buf, buf);
+		memcpy(ln->arg.buf, buf, size);
 		ln->arg.size = size;
 		ln->arg.offset = offset;
 		Log_insert(&n->l, ln);
