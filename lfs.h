@@ -19,6 +19,7 @@ enum {
 	LFS_FILE,
 };
 
+//fuseの各operation
 enum operations {
 	ga, 		//getattr
 	rdir, 		//readdir
@@ -32,7 +33,7 @@ enum operations {
 };
 
 
-//loglist information
+//loglist情報
 typedef struct {
 	enum operations 	oper;
 	char 				path[MAXNAME];
@@ -59,7 +60,7 @@ void Log_SetNode(Lnode *ln, const Log_arg *y, Lnode *next);
 void Log_insert(Log_list *l, Lnode *ln);
 
 
-//filelist
+//filelist情報
 typedef struct {
 	void		*buf;
 	size_t		size;
@@ -94,7 +95,7 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset);
 int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset);
 
 
-/* file_operations
+/* fuse_operations
 
 static int lfs_getattr(const char *path, struct stat *stbuf);
 static int lfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
@@ -105,6 +106,7 @@ static int lfs_utimens(const char *path, const struct timespec ts[2]);
 static int lfs_open(const char *path, struct fuse_file_info *fi);
 static int lfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int lfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+
 */
 
 #endif
