@@ -64,6 +64,7 @@ typedef struct {
 	void		*buf;
 	size_t		size;
 	char		f_name[MAXNAME];
+	int 		write_init;
 }File_arg;
 
 typedef struct __node {

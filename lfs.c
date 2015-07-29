@@ -7,7 +7,6 @@
 #include "lfs.h"
 
 static List list;
-static int log_read = 0;
 
 void Log_init(Log_list *l)
 {
@@ -106,6 +105,7 @@ void lfs_init(List *list)
 	strcpy(n->data.f_name, "lfs");
 	n->data.buf = NULL;
 	n->data.size = 0;
+	n->data.write_init = 0;
 	Insert(list, n);
 
 	Lnode *ln;
@@ -195,24 +195,33 @@ static int lfs_getattr(const char *path, struct stat *stbuf)
 		for (n = list.head; n != NULL; n = n->next)
 		{
 			if (strcmp(p, n->data.f_name) == 0){
-				stbuf->st_mode = S_IFREG | 0644;
 				stbuf->st_nlink = 1;
 				stbuf->st_size = n->data.size;
 
-				if (log_read == 0)
+				char c[] = ".";
+				char *ret;
+				if ((ret = strpbrk(p, c)) != NULL)
 				{
-					Lnode *ln;
-					ln = Log_AllocNode();
-					ln->arg.oper = ga;
-					strcpy(ln->arg.path, path);
-					ln->arg.stbuf = stbuf;
-					ln->arg.buf = NULL;
-					ln->arg.size = 0;
-					ln->arg.offset = 0;
-					Log_insert(&n->l, ln);
-					free(ln);
+					stbuf->st_mode = S_IFREG | 0444;
+					return 0;
+				}else{
+					stbuf->st_mode = S_IFREG | 0644;
+
+					if (log_read == 0)
+					{
+						Lnode *ln;
+						ln = Log_AllocNode();
+						ln->arg.oper = ga;
+						strcpy(ln->arg.path, path);
+						ln->arg.stbuf = stbuf;
+						ln->arg.buf = NULL;
+						ln->arg.size = 0;
+						ln->arg.offset = 0;
+						Log_insert(&n->l, ln);
+						free(ln);
+					}
+					return 0;
 				}
-				return 0;
 			}
 		}
 	}
@@ -280,6 +289,7 @@ static int lfs_mknod(const char *path, mode_t mode, dev_t rdev)
 	strcpy(n->data.f_name, p);
 	n->data.buf = NULL;
 	n->data.size = 0;
+	n->data.write_init = 0;
 	Insert(&list, n);
 
 	free(n);
@@ -320,6 +330,7 @@ static int lfs_unlink(const char *path)
 	strcpy(n->data.f_name, "");
 	n->data.buf = NULL;
 	n->data.size = 0;
+	n->data.write_init = 0;
 
 	Delete(&list, n);
 
@@ -345,6 +356,14 @@ static int lfs_truncate(const char *path, off_t size)
 	if (init == 0)
 		return -ENOENT;
 
+	char c[2] = ".";
+	char *ret;
+
+	if ((ret = strpbrk(p, c)) != NULL){
+		fprintf(stderr, "NONO\n");
+		return -EACCES;
+	}
+
 	if (log_read == 0)
 	{
 		Lnode *ln;
@@ -364,6 +383,63 @@ static int lfs_truncate(const char *path, off_t size)
 
 static int lfs_utimens(const char *path, const struct timespec ts[2])
 {
+	(void) ts;
+
+	if (lfs_file_type(path) != LFS_FILE)
+		return -EINVAL;
+
+	Node *n;
+	char *p = get_filename(path);
+	int init = 0;
+
+	for (n = list.head; n != NULL; n = n->next)
+	{
+		if (strcmp(p, n->data.f_name) == 0){
+			init += 1;
+			break;
+		}
+	}
+
+	if (init == 0)
+		return -ENOENT;
+
+	if (n->data.write_init == 0)
+		return 0;
+
+	Node *m = AllocNode();
+	time_t timer;
+	struct tm *t_st;
+	time(&timer);
+	//char *s = ctime(&timer);
+	t_st = localtime(&timer);
+	char s1[6], s2[6], s3[6], s4[6], s5[6];
+	sprintf(s1, ".%d:", t_st->tm_mon+1);
+	sprintf(s2, "%d:", t_st->tm_mday);
+	sprintf(s3, "%d:", t_st->tm_hour);
+	sprintf(s4, "%d:", t_st->tm_min);
+	sprintf(s5, "%d", t_st->tm_sec);
+
+	char q[127] = ".";
+	strcat(q, p);
+	printf("%s\n", q);
+	strcat(q, s1);
+	printf("%s\n", q);
+	strcat(q, s2);
+	printf("%s\n", q);
+	strcat(q, s3);
+	printf("%s\n", q);
+	strcat(q, s4);
+	printf("%s\n", q);
+	strcat(q, s5);
+	printf("%s\n", q);
+
+	strcpy(m->data.f_name, q);
+	m->data.buf = (char *)calloc(n->data.size,sizeof(char));
+	memcpy(m->data.buf, n->data.buf, n->data.size);
+	m->data.size = n->data.size;
+	Insert(&list, m);
+	free(m);
+
 	return 0;
 }
 
@@ -415,7 +491,7 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
-			init += 1;
+			init = 1;
 			break;
 		}
 	}
@@ -423,12 +499,36 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 	if (init == 0)
 		return -ENOENT;
 
+	char c[] = ".";
+	char *ret;
+
+	if ((ret = strpbrk(p, c)) != NULL)
+	{
+		fprintf(stderr, "SNAPSHOT\n");
+
+		if (offset >= n->data.size)
+			return 0;
+
+		if (size > n->data.size - offset)
+			size = n->data.size - offset;
+
+		memcpy(buf, n->data.buf, size);
+		//strcpy(buf, n->data.buf);
+		printf("%d\n", (int)size);
+		printf("%d\n", (int)n->data.size);
+		//printf("%s\n", (char*)buf);
+		//printf("%s\n", (char*)n->data.buf);
+
+		return size;
+	}
+
 	Lnode *ln;
 	//log_read = 1;
 
 	Node *s = AllocNode();
 	s->data.buf = (char *)calloc(size,sizeof(char));
 	lfs_resize(0, s);
+	size = 0;
 
 	for (ln = n->l.head; ln != NULL; ln = ln->next)
 	{
@@ -440,20 +540,21 @@ int lfs_do_read(const char *path, char *buf, size_t size, off_t offset)
 				fprintf(stderr, "CHECK3\n");
 				memcpy(s->data.buf + ln->arg.offset, ln->arg.buf, ln->arg.size);
 				printf("%d\n", (int)ln->arg.size);
-				log_read++;
+				size += ln->arg.size;
+				//log_read++;
 				break;
 			default:
 				break;
 		}
 	}
-
+/*
 	if (log_read == 0)
 	{
 		size = 0;
 		fprintf(stderr, "CHECK2\n");
 		return size;
 	}
-
+*/
 	//memcpy(buf, s->data.buf + offset, size);
 	strcpy(buf, s->data.buf);
 	free(s);
@@ -483,6 +584,7 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
+			n->data.write_init = 1;
 			init += 1;
 			break;
 		}
