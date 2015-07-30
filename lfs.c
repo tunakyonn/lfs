@@ -463,6 +463,7 @@ static int lfs_utimens(const char *path, const struct timespec ts[2])
 	m->data.buf = (char *)calloc(n->data.size,sizeof(char));
 	memcpy(m->data.buf, n->data.buf, n->data.size);
 	m->data.size = n->data.size;
+	m->data.write_init = 0;
 	Insert(&list, m);
 	free(m);
 
@@ -608,7 +609,6 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 	for (n = list.head; n != NULL; n = n->next)
 	{
 		if (strcmp(p, n->data.f_name) == 0){
-			n->data.write_init = 1;
 			init += 1;
 			break;
 		}
@@ -626,6 +626,8 @@ int lfs_do_write(const char *path, const char *buf, size_t size, off_t offset)
 		return -EACCES;
 	}
 
+	n->data.write_init = 1;
+	
 	//ファイルのsize拡大
 	if (lfs_expand(offset + size, n))
 		return -ENOMEM;
